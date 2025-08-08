@@ -1,0 +1,57 @@
+name: PHPUnit Tests
+
+on:
+  push:
+    branches:
+      - main # Or your primary branch
+  pull_request:
+    branches:
+      - main # Or your primary branch
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: ['8.3'] # Add other PHP versions as needed (e.g., '8.2', '8.1')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: intl, pdo, mbstring, zip # Add any other required extensions
+
+      - name: Install dependencies
+        uses: composer/composer-action@v3
+        with:
+          command: install --no-interaction --prefer-dist --optimize-autoloader
+          args: "--no-dev" # If you only want to test production dependencies, remove this line.
+
+      - name: Code Analysis with PHPStan
+        run: ./vendor/bin/phpstan analyse src tests --level 7 # Adjust level as needed
+
+      - name: Run PHPUnit Tests
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}  # Replace with your secret name
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+        run: ./vendor/bin/phpunit --coverage-clover clover.xml
+
+      - name: Upload coverage to GitHub
+        uses: codecov/action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }} # Required for PR annotations
+          files: clover.xml
+          fail_ci_if_error: true # Optional: Fail the CI build if coverage decreases
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        with:
+          name: phpunit-results
+          path: tests/phpunit/result.xml # Adjust path if needed
